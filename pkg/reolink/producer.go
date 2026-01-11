@@ -56,44 +56,37 @@ func Dial(source string) (core.Producer, error) {
 
 func (p *Producer) Start() error {
 	var video *core.Receiver
-
-	for _, receiver := range p.Receivers {
-		switch receiver.Codec.Name {
-		case core.CodecH264:
-			video = receiver
-			// case core.CodecAAC:
-			// 	audio = receiver
+	for _, r := range p.Receivers {
+		if r.Codec.Name == core.CodecH264 {
+			video = r
 		}
 	}
 
-	// p.streamReader = p.bcConn.startStream()
-
 	for {
 		packet := p.streamReader.Next()
+		if packet == nil || packet.Codec == "EOF" {
+			return nil
+		}
 		switch packet.Codec {
 		case "H264":
+			if video == nil {
+				continue
+			}
 			pkt := &rtp.Packet{
-				Header: rtp.Header{
-					Timestamp: core.Now90000(),
-				},
+				Header: rtp.Header{Timestamp: core.Now90000()},
 				Payload: annexb.EncodeToAVCC(packet.Data),
 			}
 			video.Input(pkt)
-			// case "AAC":
-			// 	pkt := &rtp.Packet{
-			// 		Header: rtp.Header{
-			// 			Timestamp: core.Now90000(),
-			// 		},
-			// 		Payload: packet.Data,
-			// 	}
-			// 	audio.Input(pkt)
-
+			// case "AAC": handle when audio receiver exists
 		}
 	}
 }
 
 func (p *Producer) Stop() error {
-
+	if p.bcConn != nil {
+		_ = p.bcConn.Close()
+	}
+	p.streamReader = nil
 	return nil
 }
 
@@ -114,7 +107,7 @@ func (p *Producer) probe() error {
 						Name:        core.CodecH264,
 						ClockRate:   90000,
 						PayloadType: core.PayloadTypeRAW,
-						FmtpLine:    h264.GetFmtpLine(packet.Data),
+						FmtpLine:    h264.GetFmtpLine(annexb.EncodeToAVCC(packet.Data)),
 					},
 				},
 			})

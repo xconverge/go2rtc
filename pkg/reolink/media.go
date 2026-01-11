@@ -210,6 +210,10 @@ func (r *BCStreamReader) Next() *BCMediaPacket {
 
 	for {
 		msg, err := r.conn.readHeaderAndBody()
+		if err != nil {
+			// Signal EOF so callers can stop gracefully.
+			return &BCMediaPacket{Codec: "EOF"}
+		}
 		h := msg.header
 		resp := msg.body
 		if h.Status != 200 {
